@@ -46,7 +46,10 @@ def extract_skills_ai(text):
     
     prompt = f"""
     Extract all technical skills from this resume.
-    Return them as a clean comma-separated list.
+
+    Return ONLY a Python list.
+    Example:
+    ["Python", "C++", "SQL"]
 
     Resume:
     {text}
