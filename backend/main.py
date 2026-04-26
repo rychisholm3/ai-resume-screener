@@ -103,6 +103,16 @@ def match_resume_to_job(resume_skills, job_description):
 
     Compare the resume skills to the job description.
 
+    IMPORTANT RULES:
+    - Only consider skills that appear in the job description
+    - Do NOT invent or assume missing skills
+    - Matching skills = skills in BOTH resume and job description
+    - Missing skills = skills in job description BUT NOT in resume
+    - If the score is below 85, give specific improvement advice
+    - improvement_advice = skills or concepts the candidate should learn
+    - resume_suggestions = ways to improve the resume wording for this job
+    - Keep advice practical and specific
+
     Resume skills:
     {resume_skills}
 
@@ -112,10 +122,12 @@ def match_resume_to_job(resume_skills, job_description):
     Return ONLY valid JSON in this format:
 
     {{
-    "match_score": number,
-    "matching_skills": [],
-    "missing_skills": [],
-    "summary": ""
+        "match_score": number,
+        "matching_skills": [],
+        "missing_skills": [],
+        "summary": "",
+        "improvement_advice": [],
+        "resume_suggestions": []
     }}
     """
 
