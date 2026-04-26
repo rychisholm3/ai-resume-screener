@@ -1,3 +1,4 @@
+
 # AI Resume Screener
 
 AI Resume Screener is a Python web application that helps compare and rank resume PDFs against a job description. Users can upload one or more resumes, paste a job description, and receive ranked results based on skill match, missing skills, score breakdown, and improvement advice.
