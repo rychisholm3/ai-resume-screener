@@ -54,6 +54,7 @@ def clean_list(value):
         # Handles cases where the AI returns ```json ... ```
         if cleaned_value.startswith("```"):
             cleaned_value = cleaned_value.replace("```json", "")
+            cleaned_value = cleaned_value.replace("```JSON", "")
             cleaned_value = cleaned_value.replace("```", "")
             cleaned_value = cleaned_value.strip()
 
@@ -114,6 +115,32 @@ def get_score_label(score):
         return "Weak Match"
 
 
+def create_summary_dataframe(ranked_resumes):
+    """
+    Creates the summary table used for both Streamlit display and CSV export.
+    """
+    summary_rows = []
+
+    for i, resume in enumerate(ranked_resumes, 1):
+        match = resume.get("match_result", {})
+        score = resume.get("score", 0)
+
+        matching_skills = clean_list(match.get("matching_skills", []))
+        missing_skills = clean_list(match.get("missing_skills", []))
+
+        summary_rows.append({
+            "Rank": i,
+            "Filename": resume.get("filename", "Unknown"),
+            "Score": score,
+            "Match Level": get_score_label(score),
+            "Matching Skills": ", ".join(matching_skills),
+            "Missing Skills": ", ".join(missing_skills),
+            "Summary": match.get("summary", "")
+        })
+
+    return pd.DataFrame(summary_rows)
+
+
 # analyze button
 if st.button("Analyze Resume(s)"):
 
@@ -155,30 +182,27 @@ if st.button("Analyze Resume(s)"):
             st.header("Resume Ranking Summary")
 
             # create a clean summary table
-            summary_rows = []
+            summary_df = create_summary_dataframe(ranked_resumes)
 
-            for i, resume in enumerate(ranked_resumes, 1):
-                match = resume.get("match_result", {})
-                score = resume.get("score", 0)
+            # show shorter version on the website
+            display_df = summary_df.copy()
 
-                matching_skills = clean_list(match.get("matching_skills", []))
-                missing_skills = clean_list(match.get("missing_skills", []))
-
-                summary_rows.append({
-                    "Rank": i,
-                    "Filename": resume.get("filename", "Unknown"),
-                    "Score": f"{score}%",
-                    "Match Level": get_score_label(score),
-                    "Matching Skills": ", ".join(matching_skills[:5]),
-                    "Missing Skills": ", ".join(missing_skills[:5])
-                })
-
-            summary_df = pd.DataFrame(summary_rows)
+            display_df["Score"] = display_df["Score"].astype(str) + "%"
 
             st.dataframe(
-                summary_df,
+                display_df,
                 use_container_width=True,
                 hide_index=True
+            )
+
+            # CSV download button
+            csv_data = summary_df.to_csv(index=False).encode("utf-8")
+
+            st.download_button(
+                label="Download Results as CSV",
+                data=csv_data,
+                file_name="resume_ranking_results.csv",
+                mime="text/csv"
             )
 
             st.divider()
