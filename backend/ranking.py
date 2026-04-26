@@ -9,7 +9,7 @@ def rank_resume_files(files, job_description):
     for file in files:
         resume_text = extract_text_from_pdf(file)
         skills = get_resume_skills(resume_text)
-        match_result = match_resume_to_job(skills, job_description)
+        match_result = match_resume_to_job(resume_text, skills, job_description)
 
         score = match_result.get("match_score", 0)
 

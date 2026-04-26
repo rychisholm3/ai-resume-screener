@@ -1,12 +1,27 @@
 # import tools for the frontend
 import streamlit as st
 import requests
+import pandas as pd
+import json
+
+# backend URL
+BACKEND_URL = "http://127.0.0.1:8000"
+
+# page setup
+st.set_page_config(
+    page_title="AI Resume Screener",
+    page_icon="📄",
+    layout="wide"
+)
 
 # page title
 st.title("AI Resume Screener")
 
 # short description
-st.write("Upload one or more resumes and paste a job description to get AI match scores.")
+st.write(
+    "Upload one or more resumes and paste a job description to rank candidates "
+    "based on how well their skills match the role."
+)
 
 # file uploader that allows multiple PDF files
 resume_files = st.file_uploader(
@@ -16,7 +31,88 @@ resume_files = st.file_uploader(
 )
 
 # job description input
-job_description = st.text_area("Paste job description")
+job_description = st.text_area(
+    "Paste job description",
+    height=150,
+    placeholder="Example: Computer Science Internship requiring Python, C++, Git, data structures..."
+)
+
+
+def clean_list(value):
+    """
+    Makes sure values display as lists instead of printing one character at a time.
+    """
+    if value is None:
+        return []
+
+    if isinstance(value, list):
+        return value
+
+    if isinstance(value, str):
+        cleaned_value = value.strip()
+
+        # Handles cases where the AI returns ```json ... ```
+        if cleaned_value.startswith("```"):
+            cleaned_value = cleaned_value.replace("```json", "")
+            cleaned_value = cleaned_value.replace("```", "")
+            cleaned_value = cleaned_value.strip()
+
+        try:
+            parsed_value = json.loads(cleaned_value)
+
+            if isinstance(parsed_value, list):
+                return parsed_value
+        except Exception:
+            pass
+
+        return [cleaned_value]
+
+    return []
+
+
+def show_skill_tags(skills):
+    """
+    Display skills in a cleaner tag-like format instead of a raw printed list.
+    """
+    skills = clean_list(skills)
+
+    if not skills:
+        st.caption("No skills found.")
+        return
+
+    skill_html = ""
+
+    for skill in skills:
+        skill_html += f"""
+        <span style="
+            display: inline-block;
+            padding: 6px 10px;
+            margin: 4px;
+            border-radius: 16px;
+            background-color: #262730;
+            border: 1px solid #444;
+            font-size: 14px;
+        ">
+            {skill}
+        </span>
+        """
+
+    st.markdown(skill_html, unsafe_allow_html=True)
+
+
+def get_score_label(score):
+    """
+    Returns a simple label based on the resume match score.
+    """
+    if score >= 85:
+        return "Strong Match"
+    elif score >= 70:
+        return "Good Match"
+    elif score >= 50:
+        return "Possible Match"
+    else:
+        return "Weak Match"
+
 
 # analyze button
 if st.button("Analyze Resume(s)"):
@@ -25,7 +121,6 @@ if st.button("Analyze Resume(s)"):
     if not resume_files or job_description.strip() == "":
         st.error("Please upload at least one resume and paste a job description.")
     else:
-        # send all resumes and the job description to the backend
         files = []
 
         for resume_file in resume_files:
@@ -44,47 +139,131 @@ if st.button("Analyze Resume(s)"):
             "job_description": job_description
         }
 
-        response = requests.post(
-            "http://127.0.0.1:8000/rank",
-            files=files,
-            data=data
-        )
+        with st.spinner("Analyzing resumes... This may take a moment."):
+            response = requests.post(
+                f"{BACKEND_URL}/rank",
+                files=files,
+                data=data
+            )
 
-        # show the result
         if response.status_code == 200:
             result = response.json()
+            ranked_resumes = result["ranked_resumes"]
 
-            st.subheader("Ranked Resumes")
+            st.success("Resume analysis complete.")
 
-            for i, resume in enumerate(result["ranked_resumes"], 1):
-                st.divider()
+            st.header("Resume Ranking Summary")
 
-                st.subheader(f"#{i} - {resume['filename']}")
-                st.metric("Match Score", f"{resume['score']}%")
+            # create a clean summary table
+            summary_rows = []
 
-                st.subheader("Skills Found")
-                st.write(resume["skills_found"])
+            for i, resume in enumerate(ranked_resumes, 1):
+                match = resume.get("match_result", {})
+                score = resume.get("score", 0)
 
-                match = resume["match_result"]
+                matching_skills = clean_list(match.get("matching_skills", []))
+                missing_skills = clean_list(match.get("missing_skills", []))
 
-                st.subheader("Matching Skills")
-                st.write(match.get("matching_skills", []))
+                summary_rows.append({
+                    "Rank": i,
+                    "Filename": resume.get("filename", "Unknown"),
+                    "Score": f"{score}%",
+                    "Match Level": get_score_label(score),
+                    "Matching Skills": ", ".join(matching_skills[:5]),
+                    "Missing Skills": ", ".join(missing_skills[:5])
+                })
 
-                st.subheader("Missing Skills")
-                st.write(match.get("missing_skills", []))
+            summary_df = pd.DataFrame(summary_rows)
 
-                st.subheader("Summary")
-                st.write(match.get("summary", ""))
+            st.dataframe(
+                summary_df,
+                use_container_width=True,
+                hide_index=True
+            )
 
-                st.subheader("Score Breakdown")
-                st.json(match.get("score_breakdown", {}))
+            st.divider()
 
-                st.subheader("Improvement Advice")
-                st.write(match.get("improvement_advice", []))
+            st.header("Detailed Resume Results")
 
-                st.subheader("Resume Suggestions")
-                st.write(match.get("resume_suggestions", []))
+            # show detailed results in expanders
+            for i, resume in enumerate(ranked_resumes, 1):
+                match = resume.get("match_result", {})
+                score = resume.get("score", 0)
+                filename = resume.get("filename", "Unknown file")
+
+                with st.expander(
+                    f"#{i} - {filename} | {score}% Match",
+                    expanded=(i == 1)
+                ):
+
+                    col1, col2, col3 = st.columns(3)
+
+                    with col1:
+                        st.metric("Match Score", f"{score}%")
+
+                    with col2:
+                        st.metric("Match Level", get_score_label(score))
+
+                    with col3:
+                        matching_count = len(
+                            clean_list(match.get("matching_skills", []))
+                        )
+                        st.metric("Matching Skills", matching_count)
+
+                    st.subheader("Summary")
+                    st.write(match.get("summary", "No summary available."))
+
+                    st.subheader("Skills Found in Resume")
+                    show_skill_tags(resume.get("skills_found", []))
+
+                    st.subheader("Matching Skills")
+                    show_skill_tags(match.get("matching_skills", []))
+
+                    st.subheader("Missing Skills")
+                    show_skill_tags(match.get("missing_skills", []))
+
+                    st.subheader("Score Breakdown")
+
+                    score_breakdown = match.get("score_breakdown", {})
+
+                    if score_breakdown:
+                        breakdown_df = pd.DataFrame(
+                            list(score_breakdown.items()),
+                            columns=["Category", "Score"]
+                        )
+
+                        st.dataframe(
+                            breakdown_df,
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                    else:
+                        st.caption("No score breakdown available.")
+
+                    st.subheader("Improvement Advice")
+
+                    improvement_advice = clean_list(
+                        match.get("improvement_advice", [])
+                    )
+
+                    if improvement_advice:
+                        for advice in improvement_advice:
+                            st.write(f"- {advice}")
+                    else:
+                        st.caption("No improvement advice available.")
+
+                    st.subheader("Resume Suggestions")
+
+                    resume_suggestions = clean_list(
+                        match.get("resume_suggestions", [])
+                    )
+
+                    if resume_suggestions:
+                        for suggestion in resume_suggestions:
+                            st.write(f"- {suggestion}")
+                    else:
+                        st.caption("No resume suggestions available.")
 
         else:
-            st.error("Something went wrong.")
+            st.error("Something went wrong while analyzing the resumes.")
             st.write(response.text)
