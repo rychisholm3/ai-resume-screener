@@ -1,12 +1,32 @@
-# import FastAPI so we can create a web server
-from fastapi import FastAPI
+# import FastAPI tools
+from fastapi import FastAPI, UploadFile, File
 
-# create the app instance (this is our backend server)
+# import PDF reader
+import PyPDF2
+
+# create the app
 app = FastAPI()
 
-# define a route for the homepage ("/")
-# when someone visits the root URL, this function runs
+# homepage route
 @app.get("/")
 def home():
-    # return a simple message to show the server is working
     return {"message": "AI Resume Screener is running"}
+
+# route for uploading a resume PDF
+@app.post("/upload")
+def upload_resume(file: UploadFile = File(...)):
+
+    # read the uploaded PDF
+    pdf_reader = PyPDF2.PdfReader(file.file)
+
+    resume_text = ""
+
+    # extract text from each page
+    for page in pdf_reader.pages:
+        page_text = page.extract_text()
+
+        if page_text:
+            resume_text += page_text + "\n"
+
+    # return only the first part for testing
+    return {"resume_text": resume_text[:500]}
