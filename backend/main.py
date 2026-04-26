@@ -1,5 +1,5 @@
 # import FastAPI tools
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Form
 
 # import PDF reader
 import PyPDF2
@@ -16,6 +16,8 @@ client = OpenAI()
 # create the app
 app = FastAPI()
 
+# import jason
+import json
 
 # homepage route
 @app.get("/")
@@ -91,4 +93,75 @@ def upload_resume(file: UploadFile = File(...)):
     return {
         "skills_found": skills,
         "preview": resume_text[:300]
+    }
+
+# compare resume skills to the job description
+def match_resume_to_job(resume_skills, job_description):
+
+    prompt = f"""
+    You are an AI resume screening assistant.
+
+    Compare the resume skills to the job description.
+
+    Resume skills:
+    {resume_skills}
+
+    Job description:
+    {job_description}
+
+    Return ONLY valid JSON in this format:
+
+    {{
+    "match_score": number,
+    "matching_skills": [],
+    "missing_skills": [],
+    "summary": ""
+    }}
+    """
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "user", "content": prompt}
+        ]
+    )
+
+    result = response.choices[0].message.content
+
+    try:
+        return json.loads(result)
+    except:
+        return {"raw_output": result}
+
+# route for analyzing a resume against a job description
+@app.post("/analyze")
+def analyze_resume(
+    file: UploadFile = File(...),
+    job_description: str = Form(...)
+):
+
+    # read the uploaded PDF
+    pdf_reader = PyPDF2.PdfReader(file.file)
+
+    resume_text = ""
+
+    # extract text from each page
+    for page in pdf_reader.pages:
+        page_text = page.extract_text()
+
+        if page_text:
+            resume_text += page_text + "\n"
+
+    # extract skills from the resume
+    try:
+        skills = extract_skills_ai(resume_text)
+    except Exception:
+        skills = extract_skills(resume_text)
+
+    # compare resume to job description
+    match_result = match_resume_to_job(skills, job_description)
+
+    return {
+        "skills_found": skills,
+        "match_result": match_result
     }
