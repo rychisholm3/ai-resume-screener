@@ -4,6 +4,9 @@ from fastapi import FastAPI, UploadFile, File
 # import PDF reader
 import PyPDF2
 
+# import re
+import re
+
 # create the app
 app = FastAPI()
 
@@ -27,7 +30,7 @@ def extract_skills(text):
 
     # check if each skill is in the resume text
     for skill in skills_list:
-        if skill.lower() in text.lower():
+        if re.search(rf"\b{skill}\b", text.lower()):
             found_skills.append(skill)
 
     return found_skills
