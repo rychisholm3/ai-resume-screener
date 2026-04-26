@@ -56,6 +56,9 @@ if st.button("Analyze Resume"):
             st.subheader("Summary")
             st.write(match["summary"])
 
+            st.subheader("Score Breakdown")
+            st.json(match.get("score_breakdown", {}))
+
             st.subheader("Improvement Advice")
             st.write(match.get("improvement_advice", []))
 
